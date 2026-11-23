@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Was kann KI? – Interaktives Video</title>
+<style>
+  :root { --navy:#1F2A44; --teal:#1BA39C; --orange:#FF8032; --purple:#6C5CE7; --green:#2EAA5A; --cream:#FFF8EE; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; height:100%; background:#14192a; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--navy); }
+  body { display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  #stage { position:relative; width:min(100vw, calc(100vh * 16 / 9)); aspect-ratio:16/9; background:var(--cream); overflow:hidden; border-radius: 0; }
+  video { position:absolute; inset:0; width:100%; height:100%; display:block; background:var(--cream); }
+  .layer { position:absolute; inset:0; z-index:5; }
+  #resume { z-index:4; } #fake, #end { z-index:6; } #start { z-index:7; } #confetti { z-index:8; } .toast { z-index:9; } .topbar { z-index:10; }
+  .hidden { display:none !important; }
+
+  /* answer hotspots, placed over the A/B cards drawn in the video */
+  .hot { position:absolute; top:34.26%; height:35.19%; width:41.15%; border-radius:2.2vw; cursor:pointer; border:none; background:transparent;
+         box-shadow: 0 0 0 0.35vw rgba(255,128,50,0.0); animation: glow 1.4s ease-in-out infinite; }
+  .hot.a { left:7.81%; } .hot.b { left:51.56%; }
+  @keyframes glow { 0%,100% { box-shadow: 0 0 0 0.25vw rgba(255,128,50,0.15); } 50% { box-shadow: 0 0 0 0.6vw rgba(255,128,50,0.75); } }
+  .hot.right { animation:none; background: rgba(46,170,90,0.22); box-shadow: 0 0 0 0.7vw var(--green); }
+  .hot.wrong { animation: shake 0.45s; background: rgba(230,60,60,0.18); box-shadow: 0 0 0 0.7vw #e63c3c; }
+  .hot.hint { animation: hint 0.8s ease-in-out infinite; }
+  @keyframes hint { 0%,100% { box-shadow: 0 0 0 0.3vw rgba(46,170,90,0.3); } 50% { box-shadow: 0 0 0 0.9vw rgba(46,170,90,0.9); } }
+  @keyframes shake { 0%,100% { transform:translateX(0); } 20% { transform:translateX(-1.4vw); } 40% { transform:translateX(1.4vw); } 60% { transform:translateX(-0.9vw); } 80% { transform:translateX(0.9vw); } }
+  .abbar { position:absolute; left:24.4%; width:67.9%; top:75.9%; height:12.2%; background:var(--orange); border-radius:99px; display:flex; align-items:center; justify-content:center; gap:1.6vw; color:#fff; font-weight:900; font-size:2.4vw; }
+  .abbtn { font: inherit; font-weight:900; font-size:2.8vw; width:9vw; height:75%; min-width:56px; min-height:34px; border:0.35vw solid #fff; border-radius:99px; color:#fff; cursor:pointer;
+           box-shadow:0 0.4vw 0 rgba(0,0,0,.2); animation: pulse 1.6s ease-in-out infinite; }
+  .abbtn[data-i="0"] { background:var(--teal); } .abbtn[data-i="1"] { background:var(--purple); }
+  .abbtn:disabled { opacity:.5; animation:none; }
+  .mark { position:absolute; top:-1.6vw; right:-1.2vw; width:4.6vw; height:4.6vw; border-radius:50%; display:flex; align-items:center; justify-content:center;
+          font-size:2.8vw; color:#fff; font-weight:900; }
+
+  .toast { position:absolute; left:50%; top:4%; transform:translateX(-50%) scale(0.6); opacity:0; padding:1vw 2.4vw; border-radius:99px;
+           font-weight:800; font-size:2.4vw; color:#fff; background:var(--navy); transition: transform .25s cubic-bezier(.3,1.6,.6,1), opacity .2s; white-space:nowrap; }
+  .toast.show { transform:translateX(-50%) scale(1); opacity:1; }
+  .toast.good { background:var(--green); } .toast.bad { background:#e05a3a; }
+
+  .panel { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2vw;
+           background: rgba(255,248,238,0.94); text-align:center; padding:4%; }
+  .panel h1 { margin:0; font-size:5.2vw; line-height:1.05; font-weight:900; letter-spacing:-0.02em; }
+  .panel p { margin:0; font-size:2.2vw; max-width:70%; line-height:1.35; }
+  .btn { font: inherit; font-weight:800; font-size:2.6vw; padding:1.3vw 3.6vw; border:none; border-radius:99px; color:#fff; background:var(--orange);
+         cursor:pointer; box-shadow: 0 0.6vw 0 #c95a17; transition: transform .1s; }
+  .btn:active { transform: translateY(0.4vw); box-shadow: 0 0.2vw 0 #c95a17; }
+  .btn.ghost { background:#fff; color:var(--navy); box-shadow: 0 0.5vw 0 #d9d2c6; font-size:1.8vw; padding:0.9vw 2.4vw; }
+  .start-bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter: blur(2px) brightness(1.02); opacity:0.55; }
+  .pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
+
+  .topbar { position:absolute; right:1.4%; top:2.2%; display:flex; gap:0.8vw; }
+  .icon { width:4vw; height:4vw; min-width:34px; min-height:34px; border-radius:50%; border:none; background:rgba(31,42,68,0.75); color:#fff; font-size:1.9vw; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .icon svg { width:55%; height:55%; fill:#fff; }
+
+  /* fake-or-real rounds */
+  .fake-grid { display:flex; gap:3vw; justify-content:center; width:92%; }
+  .fake-card { position:relative; flex:1; max-width:42vw; aspect-ratio:4/3; border-radius:1.6vw; overflow:hidden; border:0.45vw solid #fff; box-shadow:0 1vw 2.4vw rgba(31,42,68,.18); cursor:pointer; background:#ddd; padding:0; }
+  .fake-card img { width:100%; height:100%; object-fit:cover; display:block; }
+  .fake-card .lab { position:absolute; left:1vw; top:1vw; background:var(--navy); color:#fff; font-weight:900; font-size:2.2vw; width:4vw; height:4vw; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .fake-card.right { border-color:var(--green); } .fake-card.wrong { border-color:#e63c3c; animation: shake .45s; }
+  .fake-card .stamp { position:absolute; inset:auto 0 0 0; padding:0.8vw; font-weight:900; font-size:2vw; color:#fff; }
+
+  #confetti { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  #portrait { position:fixed; inset:auto 0 0 0; padding:10px 14px; background:var(--orange); color:#fff; font-weight:700; text-align:center; font-size:15px; display:none; }
+  @media (orientation: portrait) and (max-width: 700px) { #portrait { display:block; } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="vid" playsinline webkit-playsinline preload="auto"></video>
+  <div id="resume" class="panel hidden"><button class="btn pulse" id="resumeBtn">▶&nbsp; Weiter</button></div>
+
+  <div id="quiz" class="layer hidden">
+    <button class="hot a" data-i="0" aria-label="Antwort A"></button>
+    <button class="hot b" data-i="1" aria-label="Antwort B"></button>
+    <div class="abbar"><span>👆 Tippt auf</span><button class="abbtn" data-i="0">A</button><span>oder</span><button class="abbtn" data-i="1">B</button></div>
+  </div>
+
+  <div id="fake" class="panel hidden">
+    <h1 id="fakeTitle">Echt oder Fake?</h1>
+    <p id="fakeQ">Eines dieser Bilder wurde verändert. Tippt auf den Fake!</p>
+    <div class="fake-grid" id="fakeGrid"></div>
+  </div>
+
+  <div id="start" class="panel">
+    <img class="start-bg" src="poster.jpg" alt="">
+    <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:2vw">
+      <h1>Was kann KI?</h1>
+      <p>Ein Video zum Mitspielen: Nach jedem Teil müsst ihr die richtige Antwort antippen – erst dann geht es weiter! 🔊 Ton an!</p>
+      <button class="btn pulse" id="go">▶&nbsp; Los geht's!</button>
+      <p style="font-size:1.6vw; opacity:.7">Tipp: Handy quer halten</p>
+    </div>
+  </div>
+
+  <div id="end" class="panel hidden">
+    <h1>Super gemacht! 🏆</h1>
+    <p>Ihr wisst jetzt, was KI kann – und worauf man aufpassen muss. Weiter geht's in der App: Schaut euch das Plakat im Fenster an und löst das Rätsel!</p>
+    <button class="btn ghost" id="again">↺ Nochmal von vorne</button>
+  </div>
+
+  <canvas id="confetti"></canvas>
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <button class="icon hidden" id="replay" title="Teil nochmal ansehen" aria-label="Teil nochmal ansehen">↺</button>
+    <button class="icon" id="fs" title="Vollbild" aria-label="Vollbild"><svg viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 0h2v6h-6v-2h4v-4z"/></svg></button>
+  </div>
+</div>
+<div id="portrait">📱 Bitte das Handy quer halten</div>
+
+<script>
+// ---- Ablauf -------------------------------------------------------------
+// correct: 0 = A, 1 = B. hint: kleiner Tipp nach zwei falschen Versuchen.
+const PARTS = [
+  { src: 'teil1.mp4', correct: 1, hint: 'Denkt an die vielen Hunde-Bilder!' },
+  { src: 'teil2.mp4', correct: 0, hint: 'Gedankenlesen? Eher nicht …' },
+  { src: 'teil3.mp4', correct: 1, hint: 'Steht das Obere Tor noch wie immer?' },
+  { src: 'teil4.mp4', correct: 0, hint: 'Sofort gesund – das wäre zu schön!' },
+  { src: 'teil5.mp4', correct: 1, hint: 'Lernen bleibt wichtig!' },
+  { src: 'teil6.mp4', correct: 0, hint: 'Videos können gefälscht sein.' },
+  { src: 'teil7.mp4', correct: null },
+];
+// "Echt oder Fake?"-Runden: after = Index des Teils, nach dessen Frage die Runde kommt.
+// Beispiel: { after: 5, question: 'Eines der Bilder vom Oberen Tor ist gefälscht. Welches?',
+//             images: [{ src: 'img/tor_echt.jpg', fake: false }, { src: 'img/tor_fake.jpg', fake: true }] }
+const FAKE_ROUNDS = [];
+
+// ---- Elemente -----------------------------------------------------------
+const $ = id => document.getElementById(id);
+const vid = $('vid'), quiz = $('quiz'), toastEl = $('toast');
+let part = 0, wrongCount = 0, locked = false;
+
+// ---- Sound (WebAudio, ohne Dateien) --------------------------------------
+let ac = null;
+function audio() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) {} return ac; }
+function tone(freq, start, dur, type = 'sine', vol = 0.18) {
+  const a = audio(); if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, a.currentTime + start);
+  g.gain.exponentialRampToValueAtTime(vol, a.currentTime + start + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + start + dur);
+  o.connect(g).connect(a.destination); o.start(a.currentTime + start); o.stop(a.currentTime + start + dur + 0.05);
+}
+const sndRight = () => { tone(660, 0, .18); tone(880, .12, .18); tone(1320, .24, .35); };
+const sndWrong = () => { tone(220, 0, .25, 'square', .08); tone(170, .2, .35, 'square', .08); };
+const sndPop = () => tone(520, 0, .12, 'triangle', .12);
+
+// ---- Hilfsfunktionen -------------------------------------------------------
+let toastTimer;
+function toast(msg, kind) {
+  toastEl.textContent = msg; toastEl.className = 'toast show ' + (kind || '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.className = 'toast', 2200);
+}
+function playPart(i) {
+  part = i; wrongCount = 0; locked = false;
+  quiz.classList.add('hidden'); $('replay').classList.add('hidden');
+  quiz.querySelectorAll('.hot').forEach(h => { h.className = h.className.replace(/ (right|wrong|hint)/g, ''); h.innerHTML = ''; });
+  quiz.querySelectorAll('.abbtn').forEach(b => b.disabled = false);
+  vid.src = PARTS[i].src; vid.currentTime = 0;
+  const p = vid.play(); if (p && p.catch) p.catch(() => { $('resume').classList.remove('hidden'); });
+  // nächsten Teil vorladen
+  if (PARTS[i + 1]) { const l = document.createElement('link'); l.rel = 'prefetch'; l.href = PARTS[i + 1].src; document.head.appendChild(l); }
+}
+function next() {
+  const round = FAKE_ROUNDS.find(r => r.after === part && !r.done);
+  if (round) return showFake(round);
+  if (part + 1 < PARTS.length) playPart(part + 1);
+}
+vid.addEventListener('playing', () => $('resume').classList.add('hidden'));
+vid.addEventListener('ended', () => {
+  try { if (vid.webkitDisplayingFullscreen && vid.webkitExitFullscreen) vid.webkitExitFullscreen(); } catch (e) {}
+  const p = PARTS[part];
+  if (p.correct === null) { $('end').classList.remove('hidden'); confetti(); sndRight(); return; }
+  quiz.classList.remove('hidden'); $('replay').classList.remove('hidden'); sndPop();
+});
+
+quiz.addEventListener('click', e => {
+  const t = e.target.closest('.hot, .abbtn'); if (!t || locked) return;
+  const i = +t.dataset.i, p = PARTS[part];
+  const h = quiz.querySelectorAll('.hot')[i];
+  if (i === p.correct) {
+    locked = true; h.className += ' right'; quiz.querySelectorAll('.abbtn').forEach(b => b.disabled = true);
+    h.innerHTML = '<span class="mark" style="background:var(--green)">✓</span>';
+    sndRight(); confetti(); toast('Richtig! 🎉', 'good');
+    setTimeout(next, 1900);
+  } else {
+    wrongCount++;
+    h.className = h.className.replace(/ wrong/g, ''); void h.offsetWidth; h.className += ' wrong';
+    sndWrong(); toast(wrongCount >= 2 && p.hint ? 'Tipp: ' + p.hint : 'Hmm, das ist übertrieben! Nochmal 😉', 'bad');
+    if (wrongCount >= 2) quiz.querySelectorAll('.hot')[p.correct].className += ' hint';
+  }
+});
+
+// ---- Echt-oder-Fake-Runde ---------------------------------------------------
+function showFake(round) {
+  const box = $('fake'), grid = $('fakeGrid');
+  $('fakeQ').textContent = round.question || 'Eines dieser Bilder wurde mit KI verändert. Tippt auf den Fake!';
+  grid.innerHTML = ''; let done = false, wrong = 0;
+  round.images.forEach((im, k) => {
+    const b = document.createElement('button'); b.className = 'fake-card';
+    b.innerHTML = `<img src="${im.src}" alt=""><span class="lab">${'AB'[k]}</span>`;
+    b.onclick = () => {
+      if (done) return;
+      if (im.fake) {
+        done = true; b.classList.add('right');
+        b.insertAdjacentHTML('beforeend', '<div class="stamp" style="background:var(--green)">✓ Richtig – das ist der Fake!</div>');
+        sndRight(); confetti(); toast('Gut erkannt! 🕵️', 'good');
+        setTimeout(() => { round.done = true; box.classList.add('hidden'); next(); }, 2600);
+      } else {
+        wrong++; b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong');
+        sndWrong(); toast(wrong >= 2 && round.hint ? 'Tipp: ' + round.hint : 'Das Bild ist echt! Schaut genau hin 🔍', 'bad');
+      }
+    };
+    grid.appendChild(b);
+  });
+  box.classList.remove('hidden'); quiz.classList.add('hidden'); sndPop();
+}
+
+// ---- Konfetti ------------------------------------------------------------------
+const cv = $('confetti'), cx = cv.getContext('2d'); let bits = [], raf = null;
+function confetti() {
+  const r = cv.getBoundingClientRect(); cv.width = r.width * devicePixelRatio; cv.height = r.height * devicePixelRatio;
+  const cols = ['#FF8032', '#1BA39C', '#6C5CE7', '#2EAA5A', '#FFC828', '#F05078'];
+  for (let i = 0; i < 140; i++) bits.push({ x: cv.width / 2, y: cv.height * 0.45, vx: (Math.random() - .5) * cv.width * 0.025, vy: -Math.random() * cv.height * 0.03 - cv.height * 0.01,
+    s: (6 + Math.random() * 8) * devicePixelRatio, c: cols[i % cols.length], a: Math.random() * 6, va: (Math.random() - .5) * .4, life: 0 });
+  if (!raf) loop();
+}
+function loop() {
+  cx.clearRect(0, 0, cv.width, cv.height);
+  bits.forEach(b => { b.x += b.vx; b.y += b.vy; b.vy += cv.height * 0.0012; b.a += b.va; b.life++;
+    cx.save(); cx.translate(b.x, b.y); cx.rotate(b.a); cx.fillStyle = b.c; cx.globalAlpha = Math.max(0, 1 - b.life / 150);
+    cx.fillRect(-b.s / 2, -b.s / 4, b.s, b.s / 2); cx.restore(); });
+  bits = bits.filter(b => b.life < 150 && b.y < cv.height + 50);
+  raf = bits.length ? requestAnimationFrame(loop) : (cx.clearRect(0, 0, cv.width, cv.height), null);
+}
+
+// ---- Knöpfe --------------------------------------------------------------------
+$('resumeBtn').onclick = () => { $('resume').classList.add('hidden'); vid.play().catch(() => {}); };
+$('go').onclick = () => { audio(); sndPop(); $('start').classList.add('hidden'); playPart(0); };
+$('again').onclick = () => { $('end').classList.add('hidden'); FAKE_ROUNDS.forEach(r => r.done = false); playPart(0); };
+$('replay').onclick = () => { quiz.classList.add('hidden'); $('replay').classList.add('hidden'); vid.currentTime = 0; vid.play().catch(() => {}); };
+$('fs').onclick = () => {
+  const st = $('stage');
+  try {
+    if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else if (st.requestFullscreen) st.requestFullscreen().catch(() => {});
+    else if (st.webkitRequestFullscreen) st.webkitRequestFullscreen();
+  } catch (e) {}
+};
+if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) $('fs').classList.add('hidden');
+</script>
+</body>
+</html>
